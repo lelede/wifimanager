@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">腾讯WiFi管家</string>
+    <string name="title_home">我的</string>
+    <string name="title_dashboard">查找免费WiFi</string>
+    <string name="title_notifications">发现</string>
+    <string name="lianjie">已连接</string>
+    <string name="jiasu2">立即加速</string>
+    <string name="tijian">安全体检</string>
+    <string name="youhua">已为你优化本次连接</string>
+    <string name="cesu">深度测速</string>
+    <string name="qiandao">签到有礼</string>
+    <string name="jiasu">一键加速，畅游网络</string>
+    <string name="permission">权限(permission)</string>
+    <string name="no_permissions">应用需要必要的运行权限</string>
+    <string name="settings">设置</string>
+    <string name="help">帮助</string>
+    <string name="string_help_text">当前应用缺少必要权限。\n\n请点击\"设置\"-\"权限\"-打开所需权限。\n\n最后点击两次后退按钮，即可返回。</string>
+    <string name="quit">退出</string>
+    <string name="fenxiangwifi">分享为公共WiFi</string>
+    <string name="quxiao">取消</string>
+    <string name="queding">确定</string>
+
+</resources>

@@ -1,0 +1,2 @@
+rootProject.name = "newtwxt2"
+include ':app'
