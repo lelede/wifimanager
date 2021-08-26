@@ -34,6 +34,7 @@ import android.widget.Toast;
 
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -42,6 +43,9 @@ import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.listener.OnItemChildClickListener;
 import com.example.newtwxt2.kuozhan.GnShuoMing;
 import com.example.newtwxt2.kuozhan.XiangQingActivity;
+import com.uuzuche.lib_zxing.activity.CaptureActivity;
+import com.uuzuche.lib_zxing.activity.CodeUtils;
+import com.uuzuche.lib_zxing.activity.ZXingLibrary;
 
 
 import java.util.ArrayList;
@@ -60,10 +64,12 @@ public class AnimationUseActivity extends AppCompatActivity {
     ProgressBar pbWifiLoading;
     private static final String TAG = "MainActivity";
     private int connectType = 0;
+    private final static int REQ_CODE = 1028;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ZXingLibrary.initDisplayOpinion(this);
         setContentView(R.layout.activity_testdd);
         pbWifiLoading = (ProgressBar) this.findViewById(R.id.pb_wifi_loading);
         hidingProgressBar();
@@ -76,6 +82,14 @@ public class AnimationUseActivity extends AppCompatActivity {
         mAnimationAdapter.setAnimationEnable(true);
         mRecyclerView.setAdapter(mAnimationAdapter);
         registerPermission();
+        ImageView saoyisao1 = findViewById(R.id.saoyisaoid);
+        saoyisao1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(AnimationUseActivity.this, CaptureActivity.class);
+                startActivityForResult(intent, REQ_CODE);
+            }
+        });
         mAnimationAdapter.setOnItemChildClickListener(new OnItemChildClickListener() {
             @Override
             public void onItemChildClick(BaseQuickAdapter adapter, View view, int position) {
@@ -422,4 +436,44 @@ public class AnimationUseActivity extends AppCompatActivity {
         pbWifiLoading.setVisibility(View.VISIBLE);
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable @org.jetbrains.annotations.Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_CODE) {
+            //处理扫描结果（在界面上显示）
+            if (null != data) {
+                Bundle bundle = data.getExtras();
+                if (bundle == null) {
+                    return;
+                }
+                if (bundle.getInt(CodeUtils.RESULT_TYPE) == CodeUtils.RESULT_SUCCESS) {
+                    String result = bundle.getString(CodeUtils.RESULT_STRING);
+                    Toast.makeText(this, "解析结果:" + result, Toast.LENGTH_LONG).show();
+                    Log.e("DSDSD",result);
+                    String state = null;
+                    String name = null;
+                    String password = null;
+                    String[] saoyisao = result.split("[: ;]");
+                    for(int i = 0;i<saoyisao.length;i++){
+                        if(i == 2){
+                            state=saoyisao[i];
+                            Log.e("jiami",state);
+                        }
+                        if(i == 4){
+                            name=saoyisao[i];
+                            Log.e("jiami",name);
+                        }
+                        if(i == 6){
+                            password=saoyisao[i];
+                            Log.e("jiami",password);
+                        }
+                    }
+                    WifiConfiguration wifiConfiguration = WifiSupport.createWifiConfig(name,password,WifiSupport.getWifiCipher(state));
+                    WifiSupport.addNetWork(wifiConfiguration,getContext());
+                } else if (bundle.getInt(CodeUtils.RESULT_TYPE) == CodeUtils.RESULT_FAILED) {
+                    Toast.makeText(AnimationUseActivity.this, "解析二维码失败", Toast.LENGTH_LONG).show();
+                }
+            }
+        }
+    }
 }
