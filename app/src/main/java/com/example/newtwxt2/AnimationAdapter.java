@@ -26,6 +26,7 @@ public class AnimationAdapter extends BaseQuickAdapter<Status, BaseViewHolder> i
     @Override
     protected void convert( BaseViewHolder ViewHolder, Status list) {
         ViewHolder.setText(R.id.wifi_name, list.getSsid());
+        ViewHolder.setText(R.id.wifi_state,list.getState());
         if(Math.abs(list.getLevel())>90){
             ViewHolder.setImageResource(R.id.wifi_image,R.drawable.wifi_1);
         }

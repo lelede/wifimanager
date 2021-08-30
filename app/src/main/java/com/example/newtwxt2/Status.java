@@ -6,6 +6,27 @@ public class Status {
     private String State;
     private String capabilities;
 
+    public String getPassword() {
+        return password;
+    }
+
+    @Override
+    public String toString() {
+        return "Status{" +
+                "ssid='" + ssid + '\'' +
+                ", level=" + level +
+                ", State='" + State + '\'' +
+                ", capabilities='" + capabilities + '\'' +
+                ", password='" + password + '\'' +
+                '}';
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    private String password;
+
     public int getLevel() {
         return level;
     }
@@ -20,15 +41,6 @@ public class Status {
 
     public void setLevel(int level) {
         this.level = level;
-    }
-
-    @Override
-    public String toString() {
-        return "Status{" +
-                "ssid='" + ssid + '\'' +
-                ", level=" + level +
-                ", capabilities='" + capabilities + '\'' +
-                '}';
     }
 
     public String getSsid() {

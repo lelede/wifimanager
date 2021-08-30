@@ -14,8 +14,8 @@
 
     <TextView
         android:id="@+id/wifi_name"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:layout_alignBottom="@+id/wifi_image"
         android:layout_marginLeft="15dp"
         android:layout_marginTop="5dp"
@@ -25,7 +25,15 @@
         android:textColor="@color/black"
         android:textSize="20sp" />
 
-        <ImageView
+    <TextView
+        android:id="@+id/wifi_state"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="WiFi状态"
+        android:layout_below="@+id/wifi_name"
+        android:layout_marginLeft="70dp"/>
+
+    <ImageView
         android:id="@+id/diandian"
         android:layout_width="30dp"
         android:layout_height="30dp"

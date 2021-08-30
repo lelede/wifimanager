@@ -4,9 +4,11 @@ package com.example.newtwxt2;
 import android.Manifest;
 import android.app.Dialog;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
@@ -15,8 +17,11 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.IBinder;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
+import android.text.TextUtils;
 import android.text.method.HideReturnsTransformationMethod;
 import android.text.method.LinkMovementMethod;
 import android.text.method.PasswordTransformationMethod;
@@ -43,20 +48,28 @@ import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.listener.OnItemChildClickListener;
 import com.example.newtwxt2.kuozhan.GnShuoMing;
 import com.example.newtwxt2.kuozhan.XiangQingActivity;
+import com.google.zxing.common.StringUtils;
 import com.uuzuche.lib_zxing.activity.CaptureActivity;
 import com.uuzuche.lib_zxing.activity.CodeUtils;
 import com.uuzuche.lib_zxing.activity.ZXingLibrary;
 
 
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
+import static com.example.newtwxt2.AppContants.WIFI_STATE_CONNECT;
 import static com.example.newtwxt2.util.Utils.getContext;
 
 public class AnimationUseActivity extends AppCompatActivity {
-    private RecyclerView mRecyclerView;
+
     List<Status> realWifiList = new ArrayList<>();
     private AnimationAdapter mAnimationAdapter;
     private boolean isOpenEye = false;
@@ -65,10 +78,19 @@ public class AnimationUseActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private int connectType = 0;
     private final static int REQ_CODE = 1028;
+    private RecyclerView mRecyclerView;
+    private WifiBroadcastReceiver wifiReceiver;
+    private Handler mHandler;
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mHandler.removeCallbacksAndMessages(null);
+    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mHandler = new Handler();
         ZXingLibrary.initDisplayOpinion(this);
         setContentView(R.layout.activity_testdd);
         pbWifiLoading = (ProgressBar) this.findViewById(R.id.pb_wifi_loading);
@@ -82,7 +104,9 @@ public class AnimationUseActivity extends AppCompatActivity {
         mAnimationAdapter.setAnimationEnable(true);
         mRecyclerView.setAdapter(mAnimationAdapter);
         registerPermission();
+        TextView wifishishiname = findViewById(R.id.wifi_name_shishi);
         ImageView saoyisao1 = findViewById(R.id.saoyisaoid);
+        //扫一扫功能
         saoyisao1.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -90,6 +114,7 @@ public class AnimationUseActivity extends AppCompatActivity {
                 startActivityForResult(intent, REQ_CODE);
             }
         });
+        //列表点击
         mAnimationAdapter.setOnItemChildClickListener(new OnItemChildClickListener() {
             @Override
             public void onItemChildClick(BaseQuickAdapter adapter, View view, int position) {
@@ -104,8 +129,7 @@ public class AnimationUseActivity extends AppCompatActivity {
                         //**************************************************************************************
                         //点击名字后，进行判断如果没有密码或者连接过，直接进行连接
                         //如果有密码弹出mydialog
-//                        Status wifiBean = realWifiList.get(position);
-                        if(status.getState().equals(AppContants.WIFI_STATE_UNCONNECT) || status.getState().equals(AppContants.WIFI_STATE_CONNECT)){
+                        if(status.getState().equals(AppContants.WIFI_STATE_UNCONNECT) || status.getState().equals(WIFI_STATE_CONNECT)){
                             String capabilities = status.getCapabilities();
                             if(WifiSupport.getWifiCipher(capabilities) == WifiSupport.WifiCipherType.WIFICIPHER_NOPASS){//无需密码
                                 WifiConfiguration tempConfig  = WifiSupport.isExsits(status.getSsid(),AnimationUseActivity.this);
@@ -140,9 +164,10 @@ public class AnimationUseActivity extends AppCompatActivity {
         Status status = mAnimationAdapter.getItem(position);
         Dialog mDialog ;
         mDialog = new Dialog(AnimationUseActivity.this);
-        //2.填充布局
+        //填充布局
         LayoutInflater inflater = LayoutInflater.from(AnimationUseActivity.this);
         View dialogView = inflater.inflate(R.layout.dailog_layout, null);
+        //声明控件
         TextView wifiname1 = dialogView.findViewById(R.id.wifi_dialog_name);
         ImageView showwifi1 = dialogView.findViewById(R.id.showwifi);
         EditText et_password1 = dialogView.findViewById(R.id.et_password);
@@ -151,7 +176,8 @@ public class AnimationUseActivity extends AppCompatActivity {
         //将自定义布局设置进去
         mDialog.setContentView(dialogView);
         mDialog.show();
-        mDialog.setCancelable(false);
+        //点击其他位置关闭dialog
+//        mDialog.setCancelable(false);
         wifiname1.setText(status.getSsid());
         //CheckBox的点击事件
         fxwf1.setOnClickListener(new View.OnClickListener() {
@@ -169,7 +195,6 @@ public class AnimationUseActivity extends AppCompatActivity {
                     style.setSpan(clickableSpan, 17, 21, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
                     fxwf1.setMovementMethod(LinkMovementMethod.getInstance());
                     fxwf1.setText(style);
-
                 }else{
                     ischeck = false;
                     fxwf1.setText("分享为公共WiFi");
@@ -208,6 +233,9 @@ public class AnimationUseActivity extends AppCompatActivity {
                         {
                             WifiConfiguration wifiConfiguration = WifiSupport.createWifiConfig(status.getSsid(),et_password1.getText().toString(),WifiSupport.getWifiCipher(status.getCapabilities()));
                             WifiSupport.addNetWork(wifiConfiguration,getContext());
+                            if(ischeck){
+                                //发送广播
+                            }
                         }else {
                             WifiSupport.addNetWork(temComfig,getContext());
                         }
@@ -218,6 +246,9 @@ public class AnimationUseActivity extends AppCompatActivity {
                     if (temConfig1 == null){
                         WifiConfiguration wifiConfiguration = WifiSupport.createWifiConfig(status.getSsid(),et_password1.getText().toString(),WifiSupport.getWifiCipher(status.getCapabilities()));
                         WifiSupport.addNetWork(wifiConfiguration,getContext());
+                        if(ischeck){
+                            //发送广播
+                        }
                     }
                     else {
                         WifiSupport.addNetWork(temConfig1,getContext());
@@ -242,6 +273,7 @@ public class AnimationUseActivity extends AppCompatActivity {
         });
     }
         });
+        mHandler.postDelayed(new UpdateRunnable(),20*1000);
     }
     private void registerPermission(){
         //动态获取定位权限
@@ -265,24 +297,35 @@ public class AnimationUseActivity extends AppCompatActivity {
     public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter) {
         return super.registerReceiver(receiver, filter);
     }
-    //设置监听
-    private void regiterWifiBroadcast() {
-        WifiBroadcastReceiver wifiReceiver = new WifiBroadcastReceiver();
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);//监听wifi是开关变化的状态
-        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);//监听wifi连接状态广播,是否连接了一个有效路由
-        filter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);//监听wifi列表变化（开启一个热点或者关闭一个热点）
-        filter.addAction(WifiManager.SUPPLICANT_STATE_CHANGED_ACTION); //监听密码
-        registerReceiver(wifiReceiver, filter);
+    @Override
+    protected void onResume() {
+        //设置监听
+        super.onResume();
+            wifiReceiver = new WifiBroadcastReceiver();
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);//监听wifi是开关变化的状态
+            filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);//监听wifi连接状态广播,是否连接了一个有效路由
+            filter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);//监听wifi列表变化（开启一个热点或者关闭一个热点）
+            filter.addAction(WifiManager.SUPPLICANT_STATE_CHANGED_ACTION); //监听密码
+            registerReceiver(wifiReceiver, filter);
+        }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        this.unregisterReceiver(wifiReceiver);
     }
 
     private void initAdapter() {
         //WiFi实时数据传入
         WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        realWifiList.clear();
         wifiManager.setWifiEnabled(true);
         wifiManager.startScan();
-        regiterWifiBroadcast();
-        List<ScanResult> scanWifiList = wifiManager.getScanResults();
+//        mAnimationAdapter = new AnimationAdapter();
+//        mAnimationAdapter.setAnimationEnable(true);
+//        mRecyclerView.setAdapter(mAnimationAdapter);
+        List<ScanResult> scanWifiList = noSameName(wifiManager.getScanResults());
         Log.e("ad", String.valueOf(scanWifiList));
         //存储数据：WiFi名称，WiFi加密方式，WiFi信号强度
         for (int i = 0; i < scanWifiList.size(); i++) {
@@ -310,6 +353,7 @@ public class AnimationUseActivity extends AppCompatActivity {
         });
         Log.e("E",String.valueOf(realWifiList));
         mAnimationAdapter.setList(realWifiList);
+        mAnimationAdapter.notifyDataSetChanged();
     }
     public class WifiBroadcastReceiver extends BroadcastReceiver {
         @Override
@@ -335,7 +379,7 @@ public class AnimationUseActivity extends AppCompatActivity {
                     }
                     case WifiManager.WIFI_STATE_ENABLED:{
                         Log.d(TAG,"已经打开");
-//                        initAdapter();
+                        initAdapter();
                         break;
                     }
                     case WifiManager.WIFI_STATE_ENABLING:{
@@ -358,7 +402,7 @@ public class AnimationUseActivity extends AppCompatActivity {
                     }
                     mAnimationAdapter.notifyDataSetChanged();
                 }else if(NetworkInfo.State.CONNECTED == info.getState()){//wifi连接上了
-                    Log.d(TAG,"wifi连接上了");
+                    Log.e(TAG,"wifi连接上了");
                     hidingProgressBar();
                     WifiInfo connectedWifiInfo = WifiSupport.getConnectedWifiInfo(AnimationUseActivity.this);
                     //连接成功 跳转界面 传递ip地址
@@ -373,19 +417,27 @@ public class AnimationUseActivity extends AppCompatActivity {
                     wifiListSet(connectedWifiInfo.getSSID(),connectType );
                 }
             }
-//            else if(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION.equals(intent.getAction())){
-//                Log.d(TAG,"网络列表变化了");
-//                wifiListChange();
-//            }
+            else if(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION.equals(intent.getAction())){
+                Log.d(TAG,"网络列表变化了");
+            }
         }
     }
-//    public void wifiListChange(){
-//        initAdapter();
-//        WifiInfo connectedWifiInfo = WifiSupport.getConnectedWifiInfo(this);
-//        if(connectedWifiInfo != null){
-//            wifiListSet(connectedWifiInfo.getSSID(),connectType);
-//        }
-//    }
+        //30秒刷新一次
+    private class UpdateRunnable implements Runnable {
+        @Override
+        public void run() {
+            wifiListChange();
+            mHandler.postDelayed(this,30*1000);
+        }
+    }
+
+    public void wifiListChange(){
+        initAdapter();
+        WifiInfo connectedWifiInfo = WifiSupport.getConnectedWifiInfo(this);
+        if(connectedWifiInfo != null){
+            wifiListSet(connectedWifiInfo.getSSID(),connectType);
+        }
+    }
     public void wifiListSet(String wifiName , int type){
         int index = -1;
         Status wifiInfo = new Status();
@@ -426,6 +478,8 @@ public class AnimationUseActivity extends AppCompatActivity {
         if(index != -1){
             realWifiList.remove(index);
             realWifiList.add(0, wifiInfo);
+            mAnimationAdapter.setList(realWifiList);
+            Log.e("ADASAD",String.valueOf(realWifiList));
             mAnimationAdapter.notifyDataSetChanged();
         }
     }
@@ -436,6 +490,7 @@ public class AnimationUseActivity extends AppCompatActivity {
         pbWifiLoading.setVisibility(View.VISIBLE);
     }
 
+    //接收扫码结果，处理扫码结果
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable @org.jetbrains.annotations.Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -475,5 +530,25 @@ public class AnimationUseActivity extends AppCompatActivity {
                 }
             }
         }
+    }
+    //去重
+    public static List<ScanResult> noSameName(List<ScanResult> oldSr)
+    {
+        List<ScanResult> newSr = new ArrayList<ScanResult>();
+        for (ScanResult result : oldSr)
+        {
+            if (!TextUtils.isEmpty(result.SSID) && !containName(newSr, result.SSID))
+                newSr.add(result);
+        }
+        return newSr;
+    }
+    public static boolean containName(List<ScanResult> sr, String name)
+    {
+        for (ScanResult result : sr)
+        {
+            if (!TextUtils.isEmpty(result.SSID) && result.SSID.equals(name))
+                return true;
+        }
+        return false;
     }
 }

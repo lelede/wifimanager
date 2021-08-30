@@ -1,5 +1,6 @@
 package com.example.newtwxt2;
 
+
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -19,6 +20,9 @@ import java.util.List;
 
 public class WifiSupport {
     private static final String TAG = "WifiSupport";
+//    private Context mContext;
+//    private AnimationUseActivity mActivity;
+//    private WifiManager wifiManager;
     public enum WifiCipherType {
         WIFICIPHER_WEP, WIFICIPHER_WPA, WIFICIPHER_NOPASS, WIFICIPHER_INVALID
     }
@@ -41,6 +45,15 @@ public class WifiSupport {
     public static List getConfigurations(Context context) {
         return ((WifiManager) context.getSystemService(Context.WIFI_SERVICE)).getConfiguredNetworks();
     }
+//private List<WifiConfiguration> getWifiConfiguration() {
+//    /*需要明确的动态权限申请，每次调用都需要检查，不然lint检查不过，故将其封装*/
+//    if (!(ContextCompat.checkSelfPermission(mContext, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+//            && ContextCompat.checkSelfPermission(mContext, android.Manifest.permission.ACCESS_WIFI_STATE) == PackageManager.PERMISSION_GRANTED)) {
+//        ActivityCompat.requestPermissions(mActivity, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_WIFI_STATE}, 9999);
+//    }
+//    List<WifiConfiguration> wifiConfigList = wifiManager.getConfiguredNetworks();
+//    return wifiConfigList;
+//}
 
     public static WifiConfiguration createWifiConfig(String SSID, String password, WifiCipherType type) {
 
@@ -108,7 +121,7 @@ public class WifiSupport {
                         .setSsidPattern(new PatternMatcher(pattern, PatternMatcher.PATTERN_PREFIX))
                         .setWpa2Passphrase(passWord)
                         .build();
-//                Log.e("===", "config.SSID:"+config.SSID+"  config.preSharedKey:"+config.preSharedKey);
+                Log.e("===", "config.SSID:"+config.SSID+"  config.preSharedKey:"+config.preSharedKey);
                 NetworkRequest networkRequest =new NetworkRequest.Builder()
                         .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                         .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)//网络不受限
