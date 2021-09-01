@@ -4,11 +4,9 @@ package com.example.newtwxt2;
 import android.Manifest;
 import android.app.Dialog;
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
@@ -18,7 +16,7 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.IBinder;
+import android.os.Looper;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
@@ -36,35 +34,31 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.listener.OnItemChildClickListener;
 import com.example.newtwxt2.kuozhan.GnShuoMing;
 import com.example.newtwxt2.kuozhan.XiangQingActivity;
-import com.google.zxing.common.StringUtils;
 import com.uuzuche.lib_zxing.activity.CaptureActivity;
 import com.uuzuche.lib_zxing.activity.CodeUtils;
 import com.uuzuche.lib_zxing.activity.ZXingLibrary;
-
-
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.MulticastSocket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-
 import static com.example.newtwxt2.AppContants.WIFI_STATE_CONNECT;
 import static com.example.newtwxt2.util.Utils.getContext;
 
@@ -81,6 +75,18 @@ public class AnimationUseActivity extends AppCompatActivity {
     private RecyclerView mRecyclerView;
     private WifiBroadcastReceiver wifiReceiver;
     private Handler mHandler;
+    private static final int CLIENT_PORT = 8000;
+    private static final int SERVER_PORT = 3000;
+    private byte bufClient[] = new byte[1024];
+    private byte bufServer[] = new byte[1024];
+    private static final int BUF_LENGTH = 1024;
+    private DatagramSocket client;
+    private DatagramPacket dpClientSend;
+    private DatagramPacket dpClientReceive;
+    private DatagramSocket server;
+    private DatagramPacket dpServerReceive;
+    private Thread threadServer;
+    private Thread threadClient;
 
     @Override
     protected void onDestroy() {
@@ -104,6 +110,9 @@ public class AnimationUseActivity extends AppCompatActivity {
         mAnimationAdapter.setAnimationEnable(true);
         mRecyclerView.setAdapter(mAnimationAdapter);
         registerPermission();
+        //udp接收信息
+        createServer();
+        createClient();
         TextView wifishishiname = findViewById(R.id.wifi_name_shishi);
         ImageView saoyisao1 = findViewById(R.id.saoyisaoid);
         //扫一扫功能
@@ -235,6 +244,12 @@ public class AnimationUseActivity extends AppCompatActivity {
                             WifiSupport.addNetWork(wifiConfiguration,getContext());
                             if(ischeck){
                                 //发送广播
+                                WifiBean wifibean = new WifiBean();
+                                wifibean.setWifiname(status.getSsid());
+                                wifibean.setWifipassword(et_password1.getText().toString());
+                                wifibean.setCapabilities(status.getCapabilities());
+                                starClientThread(wifibean);
+                                Toast.makeText(AnimationUseActivity.this,"wpa我点击了",Toast.LENGTH_SHORT).show();
                             }
                         }else {
                             WifiSupport.addNetWork(temComfig,getContext());
@@ -248,6 +263,12 @@ public class AnimationUseActivity extends AppCompatActivity {
                         WifiSupport.addNetWork(wifiConfiguration,getContext());
                         if(ischeck){
                             //发送广播
+                            WifiBean wifibean = new WifiBean();
+                            wifibean.setWifiname(status.getSsid());
+                            wifibean.setWifipassword(et_password1.getText().toString());
+                            wifibean.setCapabilities(status.getCapabilities());
+                            starClientThread(wifibean);
+                            Toast.makeText(AnimationUseActivity.this,"wep我点击了",Toast.LENGTH_SHORT).show();
                         }
                     }
                     else {
@@ -326,7 +347,7 @@ public class AnimationUseActivity extends AppCompatActivity {
 //        mAnimationAdapter.setAnimationEnable(true);
 //        mRecyclerView.setAdapter(mAnimationAdapter);
         List<ScanResult> scanWifiList = noSameName(wifiManager.getScanResults());
-        Log.e("ad", String.valueOf(scanWifiList));
+        Log.e("saomiao1", String.valueOf(scanWifiList));
         //存储数据：WiFi名称，WiFi加密方式，WiFi信号强度
         for (int i = 0; i < scanWifiList.size(); i++) {
             Status status = new Status();
@@ -351,7 +372,7 @@ public class AnimationUseActivity extends AppCompatActivity {
                 return 0;
             }
         });
-        Log.e("E",String.valueOf(realWifiList));
+        Log.e("saomiao",String.valueOf(realWifiList));
         mAnimationAdapter.setList(realWifiList);
         mAnimationAdapter.notifyDataSetChanged();
     }
@@ -470,8 +491,10 @@ public class AnimationUseActivity extends AppCompatActivity {
                 wifiInfo.setCapabilities(wifiBean.getCapabilities());
                 if(type == 1){
                     wifiInfo.setState(AppContants.WIFI_STATE_CONNECT);
-                }else{
+                }else if(type == 2){
                     wifiInfo.setState(AppContants.WIFI_STATE_ON_CONNECTING);
+                }else {
+                    wifiInfo.setState(AppContants.WIFI_STATE_CAN_CONNECTING);
                 }
             }
         }
@@ -479,7 +502,7 @@ public class AnimationUseActivity extends AppCompatActivity {
             realWifiList.remove(index);
             realWifiList.add(0, wifiInfo);
             mAnimationAdapter.setList(realWifiList);
-            Log.e("ADASAD",String.valueOf(realWifiList));
+            Log.e("change",String.valueOf(realWifiList));
             mAnimationAdapter.notifyDataSetChanged();
         }
     }
@@ -504,7 +527,7 @@ public class AnimationUseActivity extends AppCompatActivity {
                 if (bundle.getInt(CodeUtils.RESULT_TYPE) == CodeUtils.RESULT_SUCCESS) {
                     String result = bundle.getString(CodeUtils.RESULT_STRING);
                     Toast.makeText(this, "解析结果:" + result, Toast.LENGTH_LONG).show();
-                    Log.e("DSDSD",result);
+                    Log.e("saoma",result);
                     String state = null;
                     String name = null;
                     String password = null;
@@ -550,5 +573,119 @@ public class AnimationUseActivity extends AppCompatActivity {
                 return true;
         }
         return false;
+    }
+    //udp发送信息
+    private void starClientThread(WifiBean status) {
+        //创建用来发送的 DatagramPacket 数据报，其中应该包含要发送的信息，以及本地地址，目标端口号。
+        threadClient = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    byte[] sendData = createSendData(status.getWifiname());
+                    InetAddress clientAddress = InetAddress.getLocalHost();
+                    //创建用来发送的 DatagramPacket 数据报，其中应该包含要发送的信息，以及本地地址，目标端口号。
+                    dpClientSend = new DatagramPacket(sendData, sendData.length, clientAddress, SERVER_PORT);
+                    client.send(dpClientSend);
+                    while (true) {
+                        client.receive(dpClientReceive);
+                        final String receiveData = createReceiveData(dpClientReceive);
+                        Toast.makeText(AnimationUseActivity.this,receiveData,Toast.LENGTH_SHORT).show();
+                        Log.e("UDPClient", String.valueOf(receiveData));
+//                        tvClient.post(new Runnable() {
+//                            @Override
+//                            public void run() {
+//                                tvClient.setText(receiveData);
+//                            }
+//                        });
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        threadClient.start();
+    }
+    /**
+     * 将中文字符转码发送
+     *
+     * @param strSend
+     */
+    private byte[] createSendData(String strSend) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dataStream = new DataOutputStream(baos);
+        try {
+            dataStream.writeUTF(strSend);
+            dataStream.close();
+            return baos.toByteArray();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return new byte[0];
+    }
+
+    /**
+     * 将中文解码接收
+     *
+     * @param dp
+     */
+    private String createReceiveData(DatagramPacket dp) {
+        DataInputStream stream = new DataInputStream(new ByteArrayInputStream(dp.getData(),
+                dp.getOffset(), dp.getLength()));
+        try {
+            final String msg = stream.readUTF();
+            return msg;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    private void createServer() {
+        try {
+            server = new DatagramSocket(SERVER_PORT);
+            dpServerReceive = new DatagramPacket(bufServer, BUF_LENGTH);
+            startServerThread();
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
+    }
+    private void startServerThread() {
+        threadServer = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    while (true) {
+                        server.receive(dpServerReceive);
+                        final String receiveData = createReceiveData(dpServerReceive);
+                        Looper.prepare();
+                        Toast.makeText(AnimationUseActivity.this,receiveData,Toast.LENGTH_SHORT).show();
+                        Looper.loop();
+                        Log.e("UDPServer", String.valueOf(receiveData));
+                        connectType = 3;
+                        wifiListSet(receiveData,connectType);
+                        byte[] sendData = createSendData("已经收到客户端的消息");
+                        DatagramPacket dpServerSend = new DatagramPacket(sendData, sendData.length, dpServerReceive.getAddress(), dpServerReceive.getPort());
+                        server.send(dpServerSend);
+                        dpServerReceive.setLength(BUF_LENGTH);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        threadServer.start();
+    }
+    /**
+     * 创建客户端
+     */
+    private void createClient() {
+        try {
+            //创建客户端，并且指定端口号，在此端口号侦听信息。
+            client = new DatagramSocket(CLIENT_PORT);
+
+            dpClientReceive = new DatagramPacket(bufClient, BUF_LENGTH);
+
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
     }
 }
